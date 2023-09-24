@@ -328,12 +328,12 @@ DWORD RpcBind(RpcConnectionStruct* pRpcConnection, char* pInterfaceUUID, DWORD d
 DWORD RpcConnect(wchar_t* pPipeName, char* pInterfaceUUID, DWORD dwInterfaceVersion, RpcConnectionStruct* pRpcConnection)
 {
 	HANDLE hFile = NULL;
-	wchar_t szPipePath[512];
+	wchar_t szPipePath[MAX_PATH];
 	RpcConnectionStruct RpcConnection;
 
 	// set pipe path
 	memset(szPipePath, 0, sizeof(szPipePath));
-	_snwprintf(szPipePath, sizeof(szPipePath) - 1, L"\\\\127.0.0.1\\pipe\\%s", pPipeName);
+	_snwprintf(szPipePath, MAX_PATH - 1, L"\\\\127.0.0.1\\pipe\\%s", pPipeName);
 
 	// open rpc pipe
 	hFile = CreateFile(szPipePath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
