@@ -1,19 +1,15 @@
 // Slightly modified version of --> https://www.x86matthew.com/view_post?id=create_svc_rpc
 // Original Author: @x86matthew
 
-#ifdef UNICODE
-#undef UNICODE
-#endif
-
 #pragma warning(disable:4996)
 
 #include <stdio.h>
 #include <windows.h>
 
 // rpc command ids
-#define RPC_CMD_ID_OPEN_SC_MANAGER 27
-#define RPC_CMD_ID_CREATE_SERVICE 24
-#define RPC_CMD_ID_START_SERVICE 31
+#define RPC_CMD_ID_OPEN_SC_MANAGERW 15
+#define RPC_CMD_ID_CREATE_SERVICEW 12
+#define RPC_CMD_ID_START_SERVICEW 19
 #define RPC_CMD_ID_DELETE_SERVICE 2
 
 // rpc command output lengths
@@ -329,15 +325,15 @@ DWORD RpcBind(RpcConnectionStruct* pRpcConnection, char* pInterfaceUUID, DWORD d
 	return 0;
 }
 
-DWORD RpcConnect(char* pPipeName, char* pInterfaceUUID, DWORD dwInterfaceVersion, RpcConnectionStruct* pRpcConnection)
+DWORD RpcConnect(wchar_t* pPipeName, char* pInterfaceUUID, DWORD dwInterfaceVersion, RpcConnectionStruct* pRpcConnection)
 {
 	HANDLE hFile = NULL;
-	char szPipePath[512];
+	wchar_t szPipePath[512];
 	RpcConnectionStruct RpcConnection;
 
 	// set pipe path
 	memset(szPipePath, 0, sizeof(szPipePath));
-	_snprintf(szPipePath, sizeof(szPipePath) - 1, "\\\\127.0.0.1\\pipe\\%s", pPipeName);
+	_snwprintf(szPipePath, sizeof(szPipePath) - 1, L"\\\\127.0.0.1\\pipe\\%s", pPipeName);
 
 	// open rpc pipe
 	hFile = CreateFile(szPipePath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
@@ -498,7 +494,7 @@ DWORD RpcInitialiseRequestData(RpcConnectionStruct* pRpcConnection)
 	return 0;
 }
 
-DWORD RpcAppendRequestData_Binary(RpcConnectionStruct* pRpcConnection, BYTE* pData, DWORD dwDataLength)
+DWORD RpcAppendRequestData_Binary(RpcConnectionStruct* pRpcConnection, BYTE* pData, DWORD dwDataLength, BOOL isUnicode)
 {
 	DWORD dwBytesAvailable = 0;
 
@@ -519,19 +515,24 @@ DWORD RpcAppendRequestData_Binary(RpcConnectionStruct* pRpcConnection, BYTE* pDa
 	}
 
 	// store data in buffer
-	memcpy((void*)&pRpcConnection->bProcedureInputData[pRpcConnection->dwProcedureInputDataLength], pData, dwDataLength);
-	pRpcConnection->dwProcedureInputDataLength += dwDataLength;
-
-	// align to 4 bytes if necessary
-	pRpcConnection->dwProcedureInputDataLength += CALC_ALIGN_PADDING(dwDataLength, 4);
-
+	if (isUnicode) {
+		memcpy((void*)&pRpcConnection->bProcedureInputData[pRpcConnection->dwProcedureInputDataLength], pData, dwDataLength * 2);
+		pRpcConnection->dwProcedureInputDataLength += dwDataLength * 2;
+		pRpcConnection->dwProcedureInputDataLength += CALC_ALIGN_PADDING(dwDataLength*2, 4);
+	}
+	else {
+		memcpy((void*)&pRpcConnection->bProcedureInputData[pRpcConnection->dwProcedureInputDataLength], pData, dwDataLength);
+		pRpcConnection->dwProcedureInputDataLength += dwDataLength;
+		pRpcConnection->dwProcedureInputDataLength += CALC_ALIGN_PADDING(dwDataLength, 4);
+	}
+	
 	return 0;
 }
 
 DWORD RpcAppendRequestData_Dword(RpcConnectionStruct* pRpcConnection, DWORD dwValue)
 {
 	// add dword value
-	if (RpcAppendRequestData_Binary(pRpcConnection, (BYTE*)&dwValue, sizeof(DWORD)) != 0)
+	if (RpcAppendRequestData_Binary(pRpcConnection, (BYTE*)&dwValue, sizeof(DWORD), FALSE) != 0)
 	{
 		return 1;
 	}
@@ -547,33 +548,33 @@ DWORD RpcDisconnect(RpcConnectionStruct* pRpcConnection)
 	return 0;
 }
 
-int InvokeCreateSvcRpcMain(char* pExecCmd)
+int InvokeCreateSvcRpcMain(wchar_t* pExecCmd)
 {
 	RpcConnectionStruct RpcConnection;
 	BYTE bServiceManagerObject[20];
 	BYTE bServiceObject[20];
 	DWORD dwReturnValue = 0;
-	char szServiceName[256];
+	wchar_t szServiceName[MAX_PATH];
 	DWORD dwServiceNameLength = 0;
-	char szServiceCommandLine[256];
+	wchar_t szServiceCommandLine[MAX_PATH];
 	DWORD dwServiceCommandLineLength = 0;
 
 	printf("Invoking CreateSvcRpc (by @x86matthew)\n");
 
 	// generate a temporary service name
 	memset(szServiceName, 0, sizeof(szServiceName));
-	_snprintf(szServiceName, sizeof(szServiceName) - 1, "CreateSvcRpc_%u", GetTickCount());
-	dwServiceNameLength = strlen(szServiceName) + 1;
+	_snwprintf(szServiceName, MAX_PATH - 1, L"CreateSvcRpc_%u", GetTickCount());
+	dwServiceNameLength = wcslen(szServiceName) + 1;
 
 	// set service command line
 	memset(szServiceCommandLine, 0, sizeof(szServiceCommandLine));
-	_snprintf(szServiceCommandLine, sizeof(szServiceCommandLine) - 1, "cmd /c start %s", pExecCmd);
-	dwServiceCommandLineLength = strlen(szServiceCommandLine) + 1;
+	_snwprintf(szServiceCommandLine, MAX_PATH - 1, L"cmd /c start %s", pExecCmd);
+	dwServiceCommandLineLength = wcslen(szServiceCommandLine) + 1;
 
 	printf("Connecting to \\\\127.0.0.1\\pipe\\ntsvcs RPC pipe \n");
 
 	// open SVCCTL v2.0
-	if (RpcConnect("ntsvcs", "367abb81-9844-35f1-ad32-98f038001003", 2, &RpcConnection) != 0)
+	if (RpcConnect(L"ntsvcs", "367abb81-9844-35f1-ad32-98f038001003", 2, &RpcConnection) != 0)
 	{
 		printf("Failed to connect to RPC pipe\n");
 
@@ -587,7 +588,7 @@ int InvokeCreateSvcRpcMain(char* pExecCmd)
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, SC_MANAGER_ALL_ACCESS);
-	if (RpcSendRequest(&RpcConnection, RPC_CMD_ID_OPEN_SC_MANAGER) != 0)
+	if (RpcSendRequest(&RpcConnection, RPC_CMD_ID_OPEN_SC_MANAGERW) != 0)
 	{
 		// error
 		RpcDisconnect(&RpcConnection);
@@ -625,11 +626,11 @@ int InvokeCreateSvcRpcMain(char* pExecCmd)
 
 	// CreateService
 	RpcInitialiseRequestData(&RpcConnection);
-	RpcAppendRequestData_Binary(&RpcConnection, bServiceManagerObject, sizeof(bServiceManagerObject));
+	RpcAppendRequestData_Binary(&RpcConnection, bServiceManagerObject, sizeof(bServiceManagerObject), FALSE);
 	RpcAppendRequestData_Dword(&RpcConnection, dwServiceNameLength);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, dwServiceNameLength);
-	RpcAppendRequestData_Binary(&RpcConnection, (BYTE*)szServiceName, dwServiceNameLength);
+	RpcAppendRequestData_Binary(&RpcConnection, (BYTE*)szServiceName, dwServiceNameLength, TRUE);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, SERVICE_ALL_ACCESS);
 	RpcAppendRequestData_Dword(&RpcConnection, SERVICE_WIN32_OWN_PROCESS);
@@ -638,7 +639,7 @@ int InvokeCreateSvcRpcMain(char* pExecCmd)
 	RpcAppendRequestData_Dword(&RpcConnection, dwServiceCommandLineLength);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, dwServiceCommandLineLength);
-	RpcAppendRequestData_Binary(&RpcConnection, (BYTE*)szServiceCommandLine, dwServiceCommandLineLength);
+	RpcAppendRequestData_Binary(&RpcConnection, (BYTE*)szServiceCommandLine, dwServiceCommandLineLength, TRUE);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
@@ -646,7 +647,7 @@ int InvokeCreateSvcRpcMain(char* pExecCmd)
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
-	if (RpcSendRequest(&RpcConnection, RPC_CMD_ID_CREATE_SERVICE) != 0)
+	if (RpcSendRequest(&RpcConnection, RPC_CMD_ID_CREATE_SERVICEW) != 0)
 	{
 		// error
 		RpcDisconnect(&RpcConnection);
@@ -680,14 +681,14 @@ int InvokeCreateSvcRpcMain(char* pExecCmd)
 	// store service object
 	memcpy(bServiceObject, (void*)&RpcConnection.bProcedureOutputData[4], sizeof(bServiceObject));
 
-	printf("Executing '%s' as SYSTEM user...\n", pExecCmd);
+	printf("Executing '%S' as SYSTEM user...\n", pExecCmd);
 
 	// StartService
 	RpcInitialiseRequestData(&RpcConnection);
-	RpcAppendRequestData_Binary(&RpcConnection, bServiceObject, sizeof(bServiceObject));
+	RpcAppendRequestData_Binary(&RpcConnection, bServiceObject, sizeof(bServiceObject), FALSE);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
 	RpcAppendRequestData_Dword(&RpcConnection, 0);
-	if (RpcSendRequest(&RpcConnection, RPC_CMD_ID_START_SERVICE) != 0)
+	if (RpcSendRequest(&RpcConnection, RPC_CMD_ID_START_SERVICEW) != 0)
 	{
 		// error
 		RpcDisconnect(&RpcConnection);
@@ -722,7 +723,7 @@ int InvokeCreateSvcRpcMain(char* pExecCmd)
 
 	// DeleteService
 	RpcInitialiseRequestData(&RpcConnection);
-	RpcAppendRequestData_Binary(&RpcConnection, bServiceObject, sizeof(bServiceObject));
+	RpcAppendRequestData_Binary(&RpcConnection, bServiceObject, sizeof(bServiceObject), FALSE);
 	if (RpcSendRequest(&RpcConnection, RPC_CMD_ID_DELETE_SERVICE) != 0)
 	{
 		// error

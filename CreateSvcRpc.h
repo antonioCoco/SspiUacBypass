@@ -1,3 +1,3 @@
 #pragma once
 
-int InvokeCreateSvcRpcMain(char* pExecCmd);
+int InvokeCreateSvcRpcMain(wchar_t* pExecCmd);
