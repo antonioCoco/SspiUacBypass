@@ -504,6 +504,9 @@ DWORD RpcAppendRequestData_Binary(RpcConnectionStruct* pRpcConnection, BYTE* pDa
 		return 1;
 	}
 
+	if (isUnicode)
+		dwDataLength = dwDataLength * 2;
+
 	// calculate number of bytes remaining in the input buffer
 	dwBytesAvailable = sizeof(pRpcConnection->bProcedureInputData) - pRpcConnection->dwProcedureInputDataLength;
 	if (dwDataLength > dwBytesAvailable)
@@ -515,16 +518,9 @@ DWORD RpcAppendRequestData_Binary(RpcConnectionStruct* pRpcConnection, BYTE* pDa
 	}
 
 	// store data in buffer
-	if (isUnicode) {
-		memcpy((void*)&pRpcConnection->bProcedureInputData[pRpcConnection->dwProcedureInputDataLength], pData, dwDataLength * 2);
-		pRpcConnection->dwProcedureInputDataLength += dwDataLength * 2;
-		pRpcConnection->dwProcedureInputDataLength += CALC_ALIGN_PADDING(dwDataLength*2, 4);
-	}
-	else {
-		memcpy((void*)&pRpcConnection->bProcedureInputData[pRpcConnection->dwProcedureInputDataLength], pData, dwDataLength);
-		pRpcConnection->dwProcedureInputDataLength += dwDataLength;
-		pRpcConnection->dwProcedureInputDataLength += CALC_ALIGN_PADDING(dwDataLength, 4);
-	}
+	memcpy((void*)&pRpcConnection->bProcedureInputData[pRpcConnection->dwProcedureInputDataLength], pData, dwDataLength);
+	pRpcConnection->dwProcedureInputDataLength += dwDataLength;
+	pRpcConnection->dwProcedureInputDataLength += CALC_ALIGN_PADDING(dwDataLength, 4);
 	
 	return 0;
 }
